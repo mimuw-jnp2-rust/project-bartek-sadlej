@@ -1,7 +1,8 @@
-mod database {
+use serde::{Deserialize, Serialize};
 
-    struct  AuthenticationToken {
-        UserName : string,
-        cookie : string,
-    }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AuthenticationToken {
+    UserName : String,
+    cookie : String,
 }

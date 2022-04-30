@@ -1,6 +1,10 @@
-use std::net::IpAddr;
+use std::{net::{IpAddr, SocketAddr}, sync::Arc, io, collections::HashSet};
 
 use async_std::net::TcpListener;
+use dashmap::DashMap;
+use serde::{Deserialize, Serialize};
+use tokio::{sync::mpsc, net::TcpStream};
+use tokio_util::codec::{Framed, LinesCodec};
 
 use crate::config::SERVER_DEFAULT_IP_ADDRESS;
 
@@ -12,25 +16,25 @@ pub struct Channel {
     name : String,
     listener : TcpListener,
     shared : Arc<Shared>,
-    userNames : Arc<Set<String>>, // on purpose not in shared
+    userNames : Arc<HashSet<String>>, // on purpose not in shared
 }
 
 impl Channel {
-    pub fn new(name : String) {
+    pub async fn new(name : String) -> Channel {
         let free_port = portpicker::pick_unused_port().expect("No ports free");
-        let listener = TcpListener::bind((SERVER_DEFAULT_IP_ADDRESS, free_port)).await.expect(format!("Error starting channel {}!", name).into());
+        let listener = TcpListener::bind((SERVER_DEFAULT_IP_ADDRESS, free_port)).await.expect(&format!("Error starting channel {}!", name));
         Channel {
             name,
             listener,
             shared : Arc::new(Shared::new()),
-            userNames : Arc::new(Set::new()),
-        };
+            userNames : Arc::new(HashSet::new()),
+        }
     }
 
-    pub fn get_channel_info() {
+    pub fn get_channel_info(&self) -> ChannelInfo {
         ChannelInfo {
-            name,
-            address : listener.into()
+            name : self.name.clone(),
+            address : self.listener.local_addr().expect("Error converting channel address to std::net::SocketAddr"),
         }
     }
 }
@@ -38,8 +42,15 @@ impl Channel {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChannelInfo {
     name : String,
-    address : (IpAddr, u16),
+    address : std::net::SocketAddr,
 }
+
+// impl std::fmt::Display for ChannelInfo {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "({}, {})", self.name, self.address)
+//     }
+// }
+
 
 #[derive(Debug)]
 struct Shared {
