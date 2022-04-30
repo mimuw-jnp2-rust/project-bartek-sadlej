@@ -1,0 +1,20 @@
+[package]
+name = "chat-app"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+bytes = "1"
+tokio-stream = "0.1"
+tokio-util = { version = "0.7.1", features = ["codec"] }
+serde_json = "1.0.79"
+serde = { version = "1.0.136", features = ["derive"] }
+dashmap = "5.2.0"
+tracing = "0.1"
+tracing-subscriber = "0.2"
+futures = " 0.3.21"
+async-std = "1.11.0"
+portpicker = "0.1.1"
