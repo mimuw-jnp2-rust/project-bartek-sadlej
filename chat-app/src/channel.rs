@@ -45,12 +45,6 @@ pub struct ChannelInfo {
     address : std::net::SocketAddr,
 }
 
-// impl std::fmt::Display for ChannelInfo {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "({}, {})", self.name, self.address)
-//     }
-// }
-
 
 #[derive(Debug)]
 struct Shared {

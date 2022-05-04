@@ -1,11 +1,10 @@
 use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
 use tokio_util::codec::{Framed, LinesCodec};
-use std::error::Error;
 
-use crate::messages::Message;
+use crate::messages::{ServerMessage, UserMessage};
 
-pub async fn get_next_message(lines: &mut Framed<TcpStream, LinesCodec>) -> Option<Result<Message, serde_json::Error>> {
+pub async fn get_next_server_message(lines: &mut Framed<TcpStream, LinesCodec>) -> Option<Result<ServerMessage, serde_json::Error>> {
     let line = match lines.next().await {
         Some(Ok(line)) => line,
         x => {
@@ -13,8 +12,25 @@ pub async fn get_next_message(lines: &mut Framed<TcpStream, LinesCodec>) -> Opti
             return None;
         }
     };
-    tracing::error!("{}", line);
-    let decoded_msg: Result<Message, serde_json::Error> = serde_json::from_str(&line);
+    let decoded_msg: Result<ServerMessage, serde_json::Error> = serde_json::from_str(&line);
+    tracing::debug!("Received new message: {:?}", decoded_msg);
+
+    match decoded_msg {
+        Ok(msg) => Some(Ok(msg)),
+        _ => None,
+    }
+}
+
+pub async fn get_next_user_message(lines: &mut Framed<TcpStream, LinesCodec>) -> Option<Result<UserMessage, serde_json::Error>> {
+    let line = match lines.next().await {
+        Some(Ok(line)) => line,
+        x => {
+            tracing::error!("{:?}", x);
+            return None;
+        }
+    };
+    let decoded_msg: Result<UserMessage, serde_json::Error> = serde_json::from_str(&line);
+    tracing::debug!("Received new message: {:?}", decoded_msg);
 
     match decoded_msg {
         Ok(msg) => Some(Ok(msg)),
