@@ -1,5 +1,6 @@
 use std::env;
 use std::error::Error;
+// use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -31,11 +32,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // --- ------- ---
 
     // --- CONFIGURE CHANNELS ---
-    let mut channels_info : Vec<ChannelInfo> = Vec::new();
+    let mut channels_infos : Vec<ChannelInfo> = Vec::new();
     for channel_name in env::args() {
         let chat_db = Arc::clone(&chat_db);
         let new_channel= Arc::new(Channel::new(channel_name, chat_db).await);
-        channels_info.push(new_channel.get_channel_info());
+        channels_infos.push(new_channel.get_channel_info());
 
         tokio::spawn(async move {
             if let Err(e) = new_channel.listen().await {
@@ -43,8 +44,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         });
     }
-    tracing::info!("Created channels: {:?}", channels_info);
-    let channels_info_message = Arc::new(ServerMessage::ChannelsInfo { channels: channels_info });
+    tracing::info!("Created channels: {:?}", channels_infos);
+    let channels_info_message = Arc::new(ServerMessage::ChannelsInfo { channels: channels_infos });
     // --- ------------------ ---
 
     // --- START SERVER ---
@@ -81,13 +82,20 @@ async fn handle_new_user(stream: TcpStream,
         match get_next_user_message(&mut lines).await {
             Some(Ok(UserMessage::Connect{ name , password})) => {
                 if let Ok(token) = chat_db.authenticate_user(name, password, addr) {
-                    if let Ok(encoded_message) = serde_json::to_string(&ServerMessage::ConnectResponse { token : token, error: None }) {
+                    if let Ok(encoded_message) = serde_json::to_string(&ServerMessage::ConnectResponse { token : Some(token), error: "".into() }) {
                         lines.send(encoded_message).await?
                     }
                     if let Ok(encoded_message) = serde_json::to_string(channels_info_message.as_ref().into()) {
                         lines.send(encoded_message).await?
                     }
                 }
+                // TODO!
+                // else
+                // {
+                //     if let Ok(encoded_message) = serde_json::to_string(&ServerMessage::ConnectResponse { token : None, error: "" }) {
+                //         lines.send(encoded_message).await?
+                //     }
+                // }
             },
             _ => {
                 tracing::error!(

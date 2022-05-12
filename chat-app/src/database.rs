@@ -27,7 +27,7 @@ impl ChatDatabase {
         })
     }
 
-    pub fn authorize_connection(token: AuthenticationToken, addr: SocketAddr) -> bool {
+    pub fn authorize_connection(&self, token: &AuthenticationToken, addr: &SocketAddr) -> bool {
         true
     }
 }
@@ -35,6 +35,6 @@ impl ChatDatabase {
 // for now cookie it is always empty, but will be usefull later to introduce remembering the state
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AuthenticationToken {
-    user_name: String,
+    pub user_name: String,
     cookie: Cookie,
 }

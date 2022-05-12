@@ -1,3 +1,5 @@
+use thiserror::Error;
+
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
@@ -22,7 +24,7 @@ pub async fn get_next_server_message(lines: &mut Framed<TcpStream, LinesCodec>) 
     }
 }
 
-pub async fn get_next_user_message(lines: &mut Framed<TcpStream, LinesCodec>) -> Option<Result<UserMessage, serde_json::Error>> {
+pub async fn get_next_user_message(lines: &mut Framed<TcpStream, LinesCodec>) -> Option<Result<UserMessage,  serde_json::Error>> {
     let line = match lines.next().await {
         Some(Ok(line)) => line,
         x => {
@@ -39,8 +41,16 @@ pub async fn get_next_user_message(lines: &mut Framed<TcpStream, LinesCodec>) ->
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Error, Debug)]
 pub enum ChatError {
+    #[error("Received invalid message")]
+    InvalidMessage,
+    #[error("Client provided invalid password")]
     InvalidPassword,
+    #[error("Name already used")]
     NameUsed,
+    #[error("Unauthorized connection")]
+    UnauthenticatedConnection,
+    #[error("Runtime error")]
+    RuntimeError,
 }

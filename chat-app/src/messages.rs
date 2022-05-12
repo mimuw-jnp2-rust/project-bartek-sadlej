@@ -9,10 +9,10 @@ pub enum ServerMessage {
     ChannelsInfo { channels : Vec<ChannelInfo> }, 
 
     // response to Connect message with optional error descritpion
-    ConnectResponse { token : AuthenticationToken, error : Option<ChatError> },
+    ConnectResponse { token : Option<AuthenticationToken>, error : String },
 
     // All users in channel gets informed about new user
-    UserJoined { name : String },
+    // UserJoined { name : String },
 
     // text messages send in channel
     TextMessage { content : String }

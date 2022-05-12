@@ -1,5 +1,6 @@
 use std::{net::{SocketAddr}, sync::Arc, io, collections::HashSet};
 
+use futures::SinkExt;
 use tokio::net::TcpListener;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
@@ -7,7 +8,7 @@ use tokio::{sync::mpsc, net::TcpStream};
 use tokio_util::codec::{Framed, LinesCodec};
 use std::error::Error;
 
-use crate::{config::SERVER_DEFAULT_IP_ADDRESS, database::ChatDatabase};
+use crate::{config::SERVER_DEFAULT_IP_ADDRESS, database::ChatDatabase, utils::{get_next_user_message, ChatError}, messages::{UserMessage, ServerMessage}};
 
 
 type Tx = mpsc::UnboundedSender<String>;
@@ -58,14 +59,58 @@ impl Channel {
         name : &str,
         state: Arc<Shared>,
         stream: TcpStream,
-        addr: SocketAddr) -> Result<(), Box<dyn Error>> {
-            Ok(())
+        addr: SocketAddr) -> Result<(), ChatError> {
+            let mut lines = Framed::new(stream, LinesCodec::new());
+            
+            let username = match get_next_user_message(&mut lines).await {
+                Some(Ok(UserMessage::Join { token })) => {
+                    if state.chat_db.authorize_connection(&token, &addr) {
+                        token.user_name.clone()
+                    }
+                    else {
+                        tracing::info!("[{}] unauthenticated connection from {}",name, addr);
+                        return Err(ChatError::UnauthenticatedConnection);
+                    }
+                }
+                _ => return Err(ChatError::InvalidMessage),
+            };
+
+            let mut peer = Peer::new(state.clone(), lines).await.map_err(|source| ChatError::RuntimeError )?;
+            match serde_json::to_string(&ServerMessage::TextMessage{content : format!("{} has joined!", username)}) {
+                Ok(msg) => state.broadcast(addr, &msg).await,
+                _ => return Err(ChatError::RuntimeError),
+            };
+            
+            loop {
+                tokio::select! {
+                    Some(channel_member_message) = peer.rx.recv() => {
+                        peer.lines.send(&channel_member_message).await.map_err(|source| ChatError::RuntimeError)?;
+                    }
+                    user_message = get_next_user_message(&mut peer.lines) => match user_message {
+                        Some(Ok(UserMessage::TextMessage { token , content  })) => {
+                            if state.chat_db.authorize_connection(&token, &addr) {
+                                state.broadcast(addr, &content).await;
+                            }
+                            else {
+                                tracing::info!("[{}] unauthenticated connection from {}",name, addr);
+                                return Err(ChatError::UnauthenticatedConnection);
+                            }
+                        },
+                        _ => {
+                            tracing::info!("[{}] invalid message from {}, disconnecting",name, addr);
+                            return Err(ChatError::InvalidMessage);
+                        },
+                        // The stream has been exhausted.
+                        // None => break,
+                    },
+                }
+            }
     }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChannelInfo {
-    name : String,
+    pub name : String,
     address : std::net::SocketAddr,
 }
 
@@ -96,6 +141,7 @@ impl Shared {
 
 struct Peer {
     lines: Framed<TcpStream, LinesCodec>,
+    state : Arc<Shared>,
     rx: Rx,
 }
 
@@ -107,6 +153,12 @@ impl Peer {
 
         state.peers.insert(addr, tx);
 
-        Ok(Peer { lines, rx })
+        Ok(Peer { lines, state, rx })
+    }
+}
+
+impl Drop for Peer {
+    fn drop(&mut self) {
+        self.state.peers.remove(&self.lines.get_ref().peer_addr().unwrap());
     }
 }
