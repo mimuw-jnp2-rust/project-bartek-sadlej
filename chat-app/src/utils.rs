@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
 use tokio_util::codec::{Framed, LinesCodec};
@@ -25,7 +26,7 @@ pub async fn get_next_user_message(lines: &mut Framed<TcpStream, LinesCodec>) ->
     let line = match lines.next().await {
         Some(Ok(line)) => line,
         x => {
-            tracing::error!("{:?}", x);
+            tracing::error!("Received message: {:?}", x);
             return None;
         }
     };
@@ -36,4 +37,10 @@ pub async fn get_next_user_message(lines: &mut Framed<TcpStream, LinesCodec>) ->
         Ok(msg) => Some(Ok(msg)),
         _ => None,
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum ChatError {
+    InvalidPassword,
+    NameUsed,
 }

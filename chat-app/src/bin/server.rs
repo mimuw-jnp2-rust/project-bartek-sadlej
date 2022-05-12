@@ -1,13 +1,16 @@
 use std::env;
 use std::error::Error;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 
 use chat_app::config::{SERVER_DEFAULT_IP_ADDRESS, SERVER_DEFAULT_PORT};
+use chat_app::database::{ChatDatabase, AuthenticationToken};
 use chat_app::messages::{ServerMessage, UserMessage};
 use chat_app::channel::{Channel, ChannelInfo};
-use chat_app::common::{get_next_server_message, get_next_user_message};
+use chat_app::utils::get_next_user_message;
 
+use futures::SinkExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::{Framed, LinesCodec};
 
@@ -23,50 +26,74 @@ async fn main() -> Result<(), Box<dyn Error>> {
     .init();
     // --- ----------------- ---
 
+    // --- DATABSE ---
+    let chat_db = Arc::new(ChatDatabase::new());
+    // --- ------- ---
+
     // --- CONFIGURE CHANNELS ---
-    let mut channels : Vec<Channel> = Vec::new();
+    let mut channels_info : Vec<ChannelInfo> = Vec::new();
     for channel_name in env::args() {
-        channels.push(Channel::new(channel_name).await);
+        let chat_db = Arc::clone(&chat_db);
+        let new_channel= Arc::new(Channel::new(channel_name, chat_db).await);
+        channels_info.push(new_channel.get_channel_info());
+
+        tokio::spawn(async move {
+            if let Err(e) = new_channel.listen().await {
+                tracing::info!("an error occurred; error = {:?}", e);
+            }
+        });
     }
-    let channels_info : Vec<ChannelInfo> = channels.iter().skip(1).map(|channel| channel.get_channel_info()).collect();
     tracing::info!("Created channels: {:?}", channels_info);
+    let channels_info_message = Arc::new(ServerMessage::ChannelsInfo { channels: channels_info });
     // --- ------------------ ---
 
     // --- START SERVER ---
     let server_address = SocketAddr::new(SERVER_DEFAULT_IP_ADDRESS, SERVER_DEFAULT_PORT);
     let listener = TcpListener::bind(server_address)
     .await
-    .expect("Error starting server!");
-    tracing::info!("Server running on {}", server_address);
+    .expect("[MAIN_SERVER] Error starting server!");
+    tracing::info!("[MAIN_SERVER] Server running on {}", server_address);
     // --- ------------ ---
 
     // --- ACCEPT LOOP ---
     loop {
         let (stream, addr) = listener.accept().await.unwrap();
+
+        let chat_db = Arc::clone(&chat_db);
+        let channels_info_message = Arc::clone(&channels_info_message);
+        
         tokio::spawn(async move {
-            tracing::info!("accepted connection {}", addr);
-            if let Err(e) = handle_new_user(stream, addr).await {
-                tracing::info!("an error occurred; error = {:?}", e);
+            tracing::info!("[MAIN_SERVER] accepted connection {}", addr);
+            if let Err(e) = handle_new_user(stream, addr, chat_db, channels_info_message).await {
+                tracing::info!("[MAIN_SERVER] an error occurred; error = {:?}", e);
             }
         });
     }
     // --- ----------- ---
 }
 
+// Authenticates user and send them channels info
 async fn handle_new_user(stream: TcpStream,
-    addr: SocketAddr)  -> Result<(), Box<dyn Error>> {
+    addr: SocketAddr, chat_db : Arc<ChatDatabase>, channels_info_message : Arc<ServerMessage>)  -> Result<(), Box<dyn Error>> {
+        
         let mut lines = Framed::new(stream, LinesCodec::new());
-
-        let username = match get_next_user_message(&mut lines).await {
+        
+        match get_next_user_message(&mut lines).await {
             Some(Ok(UserMessage::Connect{ name , password})) => {
-                name
+                if let Ok(token) = chat_db.authenticate_user(name, password, addr) {
+                    if let Ok(encoded_message) = serde_json::to_string(&ServerMessage::ConnectResponse { token : token, error: None }) {
+                        lines.send(encoded_message).await?
+                    }
+                    if let Ok(encoded_message) = serde_json::to_string(channels_info_message.as_ref().into()) {
+                        lines.send(encoded_message).await?
+                    }
+                }
             },
             _ => {
                 tracing::error!(
-                    "Failed to get joining message. Client {} disconnected.",
+                    "[MAIN_SERVER] Failed to get connect message. Client {} disconnected.",
                     addr
                 );
-                return Ok(());
             }
         };
 

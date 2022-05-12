@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 
-use crate::{database::AuthenticationToken, channel::ChannelInfo};
+use crate::{database::AuthenticationToken, channel::ChannelInfo, utils::ChatError};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ServerMessage {
@@ -24,15 +24,9 @@ pub enum UserMessage {
     // user wants to connect, in response if gets ConnectAccepted
     Connect { name : String, password : String },
 
-    // user sends when they choosed channel to join  
-    Join { token : AuthenticationToken, channel_name : String },
+    // user sends when they want to join channel  
+    Join { token : AuthenticationToken },
 
     // text messages send in channel
     TextMessage { token : AuthenticationToken, content : String }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum ChatError {
-    InvalidPassword,
-    NameUsed,
 }
