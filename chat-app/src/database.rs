@@ -33,7 +33,7 @@ impl ChatDatabase {
 }
 
 // for now cookie it is always empty, but will be usefull later to introduce remembering the state
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AuthenticationToken {
     pub user_name: String,
     cookie: Cookie,

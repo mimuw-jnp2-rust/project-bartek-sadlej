@@ -65,6 +65,7 @@ impl Channel {
             let username = match get_next_user_message(&mut lines).await {
                 Some(Ok(UserMessage::Join { token })) => {
                     if state.chat_db.authorize_connection(&token, &addr) {
+                        tracing::info!("[{}] new authenticated connection from {}",name, addr);
                         token.user_name.clone()
                     }
                     else {
@@ -75,7 +76,7 @@ impl Channel {
                 _ => return Err(ChatError::InvalidMessage),
             };
 
-            let mut peer = Peer::new(state.clone(), lines).await.map_err(|source| ChatError::RuntimeError )?;
+            let mut peer = Peer::new(state.clone(), lines).await.map_err(|_| ChatError::RuntimeError )?;
             match serde_json::to_string(&ServerMessage::TextMessage{content : format!("{} has joined!", username)}) {
                 Ok(msg) => state.broadcast(addr, &msg).await,
                 _ => return Err(ChatError::RuntimeError),
@@ -84,12 +85,15 @@ impl Channel {
             loop {
                 tokio::select! {
                     Some(channel_member_message) = peer.rx.recv() => {
-                        peer.lines.send(&channel_member_message).await.map_err(|source| ChatError::RuntimeError)?;
+                        peer.lines.send(&channel_member_message).await.map_err(|_| ChatError::RuntimeError)?;
                     }
                     user_message = get_next_user_message(&mut peer.lines) => match user_message {
                         Some(Ok(UserMessage::TextMessage { token , content  })) => {
                             if state.chat_db.authorize_connection(&token, &addr) {
-                                state.broadcast(addr, &content).await;
+                                let formetted_message = format!("[{}] {}", token.user_name, content);
+                                if let Ok(encoded_message) = serde_json::to_string(&ServerMessage::TextMessage{content : formetted_message}) {
+                                    state.broadcast(addr, &encoded_message).await;
+                                }
                             }
                             else {
                                 tracing::info!("[{}] unauthenticated connection from {}",name, addr);
@@ -111,7 +115,7 @@ impl Channel {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChannelInfo {
     pub name : String,
-    address : std::net::SocketAddr,
+    pub address : std::net::SocketAddr,
 }
 
 

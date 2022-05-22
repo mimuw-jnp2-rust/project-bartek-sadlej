@@ -2,7 +2,7 @@ use std::env;
 use std::error::Error;
 // use std::error::Error;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc};
 
 
 use chat_app::config::{SERVER_DEFAULT_IP_ADDRESS, SERVER_DEFAULT_PORT};
@@ -82,7 +82,7 @@ async fn handle_new_user(stream: TcpStream,
         match get_next_user_message(&mut lines).await {
             Some(Ok(UserMessage::Connect{ name , password})) => {
                 if let Ok(token) = chat_db.authenticate_user(name, password, addr) {
-                    if let Ok(encoded_message) = serde_json::to_string(&ServerMessage::ConnectResponse { token : Some(token), error: "".into() }) {
+                    if let Ok(encoded_message) = serde_json::to_string(&ServerMessage::ConnectResponse { token : Some(token), error: None }) {
                         lines.send(encoded_message).await?
                     }
                     if let Ok(encoded_message) = serde_json::to_string(channels_info_message.as_ref().into()) {

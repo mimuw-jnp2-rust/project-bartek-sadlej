@@ -9,7 +9,7 @@ pub enum ServerMessage {
     ChannelsInfo { channels : Vec<ChannelInfo> }, 
 
     // response to Connect message with optional error descritpion
-    ConnectResponse { token : Option<AuthenticationToken>, error : String },
+    ConnectResponse { token : Option<AuthenticationToken>, error : Option<String> },
 
     // All users in channel gets informed about new user
     // UserJoined { name : String },
