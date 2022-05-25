@@ -6,20 +6,16 @@ use crate::utils::ChatError;
 
 type Cookie = String;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ChatDatabase {}
 
 impl ChatDatabase {
-    pub fn new() -> Self {
-        ChatDatabase {}
-    }
-
     #[allow(dead_code)]
     pub fn authenticate_user(
         &self,
         name: String,
-        password: String,
-        addr: SocketAddr,
+        _password: String,
+        _addr: SocketAddr,
     ) -> Result<AuthenticationToken, ChatError> {
         Ok(AuthenticationToken {
             user_name: name,
@@ -27,7 +23,7 @@ impl ChatDatabase {
         })
     }
 
-    pub fn authorize_connection(&self, token: &AuthenticationToken, addr: &SocketAddr) -> bool {
+    pub fn authorize_connection(&self, _token: &AuthenticationToken, _addrr: &SocketAddr) -> bool {
         true
     }
 }

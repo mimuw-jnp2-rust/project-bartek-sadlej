@@ -5,12 +5,12 @@ use chat_app::config::{SERVER_DEFAULT_IP_ADDRESS, SERVER_DEFAULT_PORT};
 use chat_app::database::AuthenticationToken;
 use chat_app::messages::{ServerMessage, UserMessage};
 use chat_app::utils::get_next_server_message;
-use futures::{SinkExt, StreamExt};
-use tokio::net::{TcpListener, TcpSocket, TcpStream};
-use tokio_util::codec::{Framed, LinesCodec};
+use futures::SinkExt;
+use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::mpsc;
+use tokio_util::codec::{Framed, LinesCodec};
 
-use async_std::io::{self, ReadExt};
+use async_std::io::{self};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -29,7 +29,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let stdin = io::stdin();
 
     let mut ctrlc_channel = ctrl_channel()?;
-
 
     loop {
         let mut server_lines = connect_to_server().await;
@@ -51,7 +50,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             token = new_token;
         }
 
-        let mut channel_addr : SocketAddr;
+        let channel_addr: SocketAddr;
         if let Some(Ok(ServerMessage::ChannelsInfo {
             channels: channels_infos,
         })) = get_next_server_message(&mut server_lines).await
@@ -71,23 +70,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     break;
                 }
             }
-        }
-        else
-        {
+        } else {
             tracing::info!("Error receiving channels info from server");
             continue;
         }
 
-        let channel_socket = TcpSocket::new_v4().expect("Error opening socket for connection to channel");
+        let channel_socket =
+            TcpSocket::new_v4().expect("Error opening socket for connection to channel");
         let stream = channel_socket
             .connect(channel_addr)
             .await
             .expect("Error connecting to channel!");
         let mut channel_lines = Framed::new(stream, LinesCodec::new());
-        if let Ok(encoded_msg) = serde_json::to_string(&UserMessage::Join { token : token.as_ref().unwrap().clone() }) {
+        if let Ok(encoded_msg) = serde_json::to_string(&UserMessage::Join {
+            token: token.as_ref().unwrap().clone(),
+        }) {
             channel_lines.send(encoded_msg).await?;
         }
-        
 
         let mut line = String::new();
         loop {
@@ -98,7 +97,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 },
                 _ = stdin.read_line(&mut line) => {
                     line.pop(); // remove end of line
-                    if line.len() == 0 {
+                    if line.is_empty() {
                         continue;
                     }
                     if let Ok(encoded_msg) = serde_json::to_string(&UserMessage::TextMessage{token : token.as_ref().unwrap().clone(), content : line.clone()}) {
@@ -112,8 +111,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
     }
-
-    Ok(())
 }
 
 async fn connect_to_server() -> Framed<TcpStream, LinesCodec> {
@@ -128,7 +125,6 @@ async fn connect_to_server() -> Framed<TcpStream, LinesCodec> {
 
     Framed::new(stream, LinesCodec::new())
 }
-
 
 fn ctrl_channel() -> Result<mpsc::UnboundedReceiver<()>, ctrlc::Error> {
     let (tx, rx) = mpsc::unbounded_channel();
