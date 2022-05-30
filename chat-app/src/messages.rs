@@ -15,9 +15,6 @@ pub enum ServerMessage {
         error: Option<String>,
     },
 
-    // All users in channel gets informed about new user
-    // UserJoined { name : String },
-
     // text messages send in channel
     TextMessage {
         content: String,

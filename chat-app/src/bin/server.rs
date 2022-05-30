@@ -13,8 +13,11 @@ use futures::SinkExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::{Framed, LinesCodec};
 
+use anyhow::{Context, Result};
+
+
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<()> {
     env::set_var("RUST_LOG", "debug");
 
     // --- CONFIGURE LOGGING ---
@@ -58,7 +61,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // --- ACCEPT LOOP ---
     loop {
-        let (stream, addr) = listener.accept().await.unwrap();
+        let (stream, addr) = listener.accept().await.context("Error in accept loop!")?;
 
         let chat_db = Arc::clone(&chat_db);
         let channels_info_message = Arc::clone(&channels_info_message);

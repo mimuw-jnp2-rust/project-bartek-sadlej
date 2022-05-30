@@ -8,10 +8,10 @@ Komunikator napisany w ruscie
 
 ## Funkcjonalność
 1)
-- Serwer tworzy podane jako argumenty kanały
-- Użytkownicy przy dołączaniu podaje nik i nazwe kanału do którego chcą dołączyć
-- Wiadomości są widoczne w obrębie jednego kanału
-- Można albo wysłać wiadomośc albo zmienić kanał
+- [x] Serwer tworzy podane jako argumenty kanały 
+- [x] Użytkownicy przy dołączaniu podaje nik i nazwe kanału do którego chcą dołączyć
+- [x] Wiadomości są widoczne w obrębie jednego kanału
+- [x] Można albo wysłać wiadomośc albo zmienić kanał
 
 2)
 - Dodanie logowania i tworzenia użytkowników 

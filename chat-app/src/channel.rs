@@ -3,10 +3,11 @@ use std::{io, net::SocketAddr, sync::Arc};
 use dashmap::DashMap;
 use futures::SinkExt;
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 use tokio::net::TcpListener;
 use tokio::{net::TcpStream, sync::mpsc};
 use tokio_util::codec::{Framed, LinesCodec};
+
+use anyhow::{Context, Result};
 
 use crate::{
     config::SERVER_DEFAULT_IP_ADDRESS,
@@ -47,10 +48,10 @@ impl Channel {
         }
     }
 
-    pub async fn listen(self: Arc<Self>) -> Result<(), Box<dyn Error>> {
+    pub async fn listen(self: Arc<Self>) -> Result<()> {
         loop {
             let me = Arc::clone(&self);
-            let (stream, addr) = me.to_owned().listener.accept().await.unwrap();
+            let (stream, addr) = me.to_owned().listener.accept().await.context(format!("[channel {}] Error in accept loop", me.name))?;
 
             let state = Arc::clone(&me.shared);
 

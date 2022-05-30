@@ -1,19 +1,21 @@
-use std::net::SocketAddr;
-use std::{env, error::Error};
-
 use chat_app::config::{SERVER_DEFAULT_IP_ADDRESS, SERVER_DEFAULT_PORT};
 use chat_app::database::AuthenticationToken;
 use chat_app::messages::{ServerMessage, UserMessage};
 use chat_app::utils::get_next_server_message;
+
+use std::env;
+use std::net::SocketAddr;
+
+use async_std::io::{self};
 use futures::SinkExt;
 use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::mpsc;
 use tokio_util::codec::{Framed, LinesCodec};
 
-use async_std::io::{self};
+use anyhow::{Context, Result};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<()> {
     env::set_var("RUST_LOG", "debug");
 
     // --- CONFIGURE LOGGING ---
@@ -23,21 +25,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_span_events(FmtSpan::FULL)
         .init();
 
-    let user_name = env::args().nth(1).expect("usage: name password");
-    let password = env::args().nth(2).expect("usage: name password");
-    let mut token: Option<AuthenticationToken> = None;
+    let user_name = env::args()
+        .nth(1)
+        .context("provide name as first argument")?;
+    let password = env::args()
+        .nth(2)
+        .context("provide password as second argument")?;
+    let mut token: Option<AuthenticationToken>;
     let stdin = io::stdin();
 
-    let mut ctrlc_channel = ctrl_channel()?;
+    let mut ctrlc_channel = ctrl_channel().context("error seting ctrl-c actions")?;
 
     loop {
         let mut server_lines = connect_to_server().await;
-        if let Ok(connect_msg) = serde_json::to_string(&UserMessage::Connect {
+        let connect_msg = serde_json::to_string(&UserMessage::Connect {
             name: user_name.clone(),
             password: password.clone(),
-        }) {
-            server_lines.send(&connect_msg).await?;
-        }
+        }).context("error connecting to server!")?;
+        server_lines.send(&connect_msg).await?;
+
         if let Some(Ok(ServerMessage::ConnectResponse {
             token: new_token,
             error: auth_error,
@@ -48,6 +54,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 continue;
             }
             token = new_token;
+        }
+        else
+        {
+            tracing::info!("did not get channels list from server, trying again...");
+            continue;
         }
 
         let channel_addr: SocketAddr;
@@ -76,11 +87,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
 
         let channel_socket =
-            TcpSocket::new_v4().expect("Error opening socket for connection to channel");
+            TcpSocket::new_v4().context("Error opening socket for connection to channel")?;
         let stream = channel_socket
             .connect(channel_addr)
             .await
-            .expect("Error connecting to channel!");
+            .context("Error connecting to channel!")?;
         let mut channel_lines = Framed::new(stream, LinesCodec::new());
         if let Ok(encoded_msg) = serde_json::to_string(&UserMessage::Join {
             token: token.as_ref().unwrap().clone(),
