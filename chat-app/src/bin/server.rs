@@ -18,21 +18,28 @@ use anyhow::{Context, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    
     env::set_var("RUST_LOG", "debug");
+    setup_logging()?;
 
-    // --- CONFIGURE LOGGING ---
+    let chat_db = Arc::new(ChatDatabase::default());
+    let channels_info_message = configure_channels(&chat_db).await?;
+    let listener = configure_server().await?;
+
+    accept_loop(listener, chat_db, channels_info_message).await?;
+    Ok(())
+}
+
+fn setup_logging() -> Result<()>{
     use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env().add_directive("chat=info".parse()?))
         .with_span_events(FmtSpan::FULL)
         .init();
-    // --- ----------------- ---
+    Ok(())
+}
 
-    // --- DATABSE ---
-    let chat_db = Arc::new(ChatDatabase::default());
-    // --- ------- ---
-
-    // --- CONFIGURE CHANNELS ---
+async fn configure_channels(chat_db : &Arc<ChatDatabase>) -> Result<Arc<ServerMessage>> {
     let mut channels_infos: Vec<ChannelInfo> = Vec::new();
     for channel_name in env::args() {
         let chat_db = Arc::clone(&chat_db);
@@ -49,17 +56,19 @@ async fn main() -> Result<()> {
     let channels_info_message = Arc::new(ServerMessage::ChannelsInfo {
         channels: channels_infos,
     });
-    // --- ------------------ ---
+    Ok(channels_info_message)
+}
 
-    // --- START SERVER ---
+async fn configure_server() -> Result<TcpListener> {
     let server_address = SocketAddr::new(SERVER_DEFAULT_IP_ADDRESS, SERVER_DEFAULT_PORT);
     let listener = TcpListener::bind(server_address)
         .await
         .expect("[MAIN_SERVER] Error starting server!");
     tracing::info!("[MAIN_SERVER] Server running on {}", server_address);
-    // --- ------------ ---
+    Ok(listener)
+}
 
-    // --- ACCEPT LOOP ---
+async fn accept_loop(listener : TcpListener, chat_db : Arc<ChatDatabase>, channels_info_message : Arc<ServerMessage>) -> Result<()> {
     loop {
         let (stream, addr) = listener.accept().await.context("Error in accept loop!")?;
 
@@ -73,7 +82,6 @@ async fn main() -> Result<()> {
             }
         });
     }
-    // --- ----------- ---
 }
 
 // Authenticates user and send them channels info
@@ -100,13 +108,6 @@ async fn handle_new_user(
                     lines.send(encoded_message).await?
                 }
             }
-            // TODO!
-            // else
-            // {
-            //     if let Ok(encoded_message) = serde_json::to_string(&ServerMessage::ConnectResponse { token : None, error: "" }) {
-            //         lines.send(encoded_message).await?
-            //     }
-            // }
         }
         _ => {
             tracing::error!(

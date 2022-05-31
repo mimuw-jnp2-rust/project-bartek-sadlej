@@ -17,7 +17,7 @@ use anyhow::{Context, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // --- CONFIGURE LOGGING ---
+
     env::set_var("RUST_LOG", "debug");
     setup_logging()?;
     let (user_name, password) = parse_args().context("usage: [name] [password]")?;
@@ -32,7 +32,7 @@ async fn main() -> Result<()> {
             .await
             .context("Error in login")?.unwrap();
 
-        let channel_addr = choose_channel(&mut server_lines, &token, &stdin).await?;
+        let channel_addr = choose_channel(&mut server_lines, &stdin).await?;
 
         let channel_lines = connect_to_channel(channel_addr, &token).await?;
 
@@ -112,7 +112,6 @@ async fn login(
 
 async fn choose_channel(
     mut server_lines: &mut Framed<TcpStream, LinesCodec>,
-    token: &AuthenticationToken,
     stdin : &io::Stdin,
 ) -> Result<SocketAddr> {
     if let Some(Ok(ServerMessage::ChannelsInfo {
@@ -129,7 +128,6 @@ async fn choose_channel(
             let mut line = String::new();
             println!("enter number in [0 ... {}]", channels_infos.len() - 1);
             stdin.read_line(&mut line).await?;
-            println!("Read line {}", line);
             let channel_nr = line.trim().parse::<usize>()?;
             if channel_nr < channels_infos.len() {
                 return Ok(channels_infos[channel_nr].address);
