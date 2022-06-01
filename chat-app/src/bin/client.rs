@@ -17,7 +17,6 @@ use anyhow::{Context, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-
     env::set_var("RUST_LOG", "debug");
     setup_logging()?;
     let (user_name, password) = parse_args().context("usage: [name] [password]")?;
@@ -30,7 +29,8 @@ async fn main() -> Result<()> {
         let mut server_lines = connect_to_server().await;
         token = login(&mut server_lines, &user_name, &password)
             .await
-            .context("Error in login")?.unwrap();
+            .context("Error in login")?
+            .unwrap();
 
         let channel_addr = choose_channel(&mut server_lines, &stdin).await?;
 
@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
     }
 }
 
-fn setup_logging() -> Result<()>{
+fn setup_logging() -> Result<()> {
     use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env().add_directive("chat=info".parse()?))
@@ -83,13 +83,13 @@ fn ctrl_channel() -> Result<mpsc::UnboundedReceiver<()>, ctrlc::Error> {
 }
 
 async fn login(
-    mut server_lines: &mut Framed<TcpStream, LinesCodec>,
-    user_name: &String,
-    password: &String,
+    server_lines: &mut Framed<TcpStream, LinesCodec>,
+    user_name: &str,
+    password: &str,
 ) -> Result<Option<AuthenticationToken>> {
     let connect_msg = serde_json::to_string(&UserMessage::Connect {
-        name: user_name.clone(),
-        password: password.clone(),
+        name: user_name.to_string(),
+        password: password.to_string(),
     })
     .context("error connecting to server!")?;
 
@@ -98,7 +98,7 @@ async fn login(
     if let Some(Ok(ServerMessage::ConnectResponse {
         token: new_token,
         error: auth_error,
-    })) = get_next_server_message(&mut server_lines).await
+    })) = get_next_server_message(server_lines).await
     {
         if let Some(error_msg) = auth_error {
             println!("{}", error_msg);
@@ -111,19 +111,18 @@ async fn login(
 }
 
 async fn choose_channel(
-    mut server_lines: &mut Framed<TcpStream, LinesCodec>,
-    stdin : &io::Stdin,
+    server_lines: &mut Framed<TcpStream, LinesCodec>,
+    stdin: &io::Stdin,
 ) -> Result<SocketAddr> {
     if let Some(Ok(ServerMessage::ChannelsInfo {
         channels: channels_infos,
-    })) = get_next_server_message(&mut server_lines).await
+    })) = get_next_server_message(server_lines).await
     {
         println!("Choose channel");
         for (idx, channel_info) in channels_infos.iter().enumerate() {
             println!("[{}] {}", idx, channel_info.name);
         }
 
-        
         loop {
             let mut line = String::new();
             println!("enter number in [0 ... {}]", channels_infos.len() - 1);
@@ -159,7 +158,11 @@ async fn connect_to_channel(
     Ok(channel_lines)
 }
 
-async fn message_loop(mut channel_lines: Framed<TcpStream, LinesCodec>, token: &AuthenticationToken, ctrlc_channel : &mut UnboundedReceiver<()>,     stdin : &io::Stdin,
+async fn message_loop(
+    mut channel_lines: Framed<TcpStream, LinesCodec>,
+    token: &AuthenticationToken,
+    ctrlc_channel: &mut UnboundedReceiver<()>,
+    stdin: &io::Stdin,
 ) -> Result<()> {
     let mut line = String::new();
     loop {

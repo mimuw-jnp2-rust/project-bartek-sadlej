@@ -51,7 +51,12 @@ impl Channel {
     pub async fn listen(self: Arc<Self>) -> Result<()> {
         loop {
             let me = Arc::clone(&self);
-            let (stream, addr) = me.to_owned().listener.accept().await.context(format!("[channel {}] Error in accept loop", me.name))?;
+            let (stream, addr) = me
+                .to_owned()
+                .listener
+                .accept()
+                .await
+                .context(format!("[channel {}] Error in accept loop", me.name))?;
 
             let state = Arc::clone(&me.shared);
 

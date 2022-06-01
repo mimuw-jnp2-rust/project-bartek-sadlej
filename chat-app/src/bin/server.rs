@@ -15,10 +15,8 @@ use tokio_util::codec::{Framed, LinesCodec};
 
 use anyhow::{Context, Result};
 
-
 #[tokio::main]
 async fn main() -> Result<()> {
-    
     env::set_var("RUST_LOG", "debug");
     setup_logging()?;
 
@@ -30,7 +28,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn setup_logging() -> Result<()>{
+fn setup_logging() -> Result<()> {
     use tracing_subscriber::{fmt::format::FmtSpan, EnvFilter};
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env().add_directive("chat=info".parse()?))
@@ -39,10 +37,10 @@ fn setup_logging() -> Result<()>{
     Ok(())
 }
 
-async fn configure_channels(chat_db : &Arc<ChatDatabase>) -> Result<Arc<ServerMessage>> {
+async fn configure_channels(chat_db: &Arc<ChatDatabase>) -> Result<Arc<ServerMessage>> {
     let mut channels_infos: Vec<ChannelInfo> = Vec::new();
     for channel_name in env::args() {
-        let chat_db = Arc::clone(&chat_db);
+        let chat_db = Arc::clone(chat_db);
         let new_channel = Arc::new(Channel::new(channel_name, chat_db).await);
         channels_infos.push(new_channel.get_channel_info());
 
@@ -68,7 +66,11 @@ async fn configure_server() -> Result<TcpListener> {
     Ok(listener)
 }
 
-async fn accept_loop(listener : TcpListener, chat_db : Arc<ChatDatabase>, channels_info_message : Arc<ServerMessage>) -> Result<()> {
+async fn accept_loop(
+    listener: TcpListener,
+    chat_db: Arc<ChatDatabase>,
+    channels_info_message: Arc<ServerMessage>,
+) -> Result<()> {
     loop {
         let (stream, addr) = listener.accept().await.context("Error in accept loop!")?;
 
