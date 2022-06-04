@@ -1,10 +1,19 @@
-use thiserror::Error;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
 use tokio_util::codec::{Framed, LinesCodec};
 
+use thiserror::Error;
+
 use crate::messages::{ServerMessage, UserMessage};
+
+pub fn calculate_hash<T: Hash>(t: &T) -> u64 {
+    let mut s = DefaultHasher::new();
+    t.hash(&mut s);
+    s.finish()
+}
 
 pub async fn get_next_server_message(
     lines: &mut Framed<TcpStream, LinesCodec>,
