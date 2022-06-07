@@ -45,6 +45,12 @@ impl ChatDatabase {
         let channel_names : Vec<String> =  results.into_iter().map(|row| ChannelData::from(row).name).collect();
         Ok(channel_names)
     }
+
+    pub async fn create_channel(&self, name: &str) ->Result<()> {
+        tracing::debug!("TODO create_channel");
+        Ok(())
+        // todo!();
+    } 
 }
 
 // for now cookie it is always empty, but will be usefull later to introduce remembering the state

@@ -39,4 +39,15 @@ pub enum UserMessage {
         token: AuthenticationToken,
         content: String,
     },
+
+    // Message with channel name to create
+    CreateChannel {
+        token: AuthenticationToken,
+        name: String
+    },
+
+    // Request to get channels info list
+    GetChannels {
+        token: AuthenticationToken,
+    }
 }

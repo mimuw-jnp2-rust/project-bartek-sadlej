@@ -1,11 +1,14 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+use futures::SinkExt;
+use serde::Serialize;
 use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
 use tokio_util::codec::{Framed, LinesCodec};
 
 use thiserror::Error;
+use anyhow::{Context, Result};
 
 use crate::messages::{ServerMessage, UserMessage};
 
@@ -17,7 +20,7 @@ pub fn calculate_hash<T: Hash>(t: &T) -> u64 {
 
 pub async fn get_next_server_message(
     lines: &mut Framed<TcpStream, LinesCodec>,
-) -> Option<Result<ServerMessage, serde_json::Error>> {
+) -> Option<Result<ServerMessage>> {
     let line = match lines.next().await {
         Some(Ok(line)) => line,
         x => {
@@ -36,7 +39,7 @@ pub async fn get_next_server_message(
 
 pub async fn get_next_user_message(
     lines: &mut Framed<TcpStream, LinesCodec>,
-) -> Option<Result<UserMessage, serde_json::Error>> {
+) -> Option<Result<UserMessage>> {
     let line = match lines.next().await {
         Some(Ok(line)) => line,
         x => {
@@ -51,6 +54,15 @@ pub async fn get_next_user_message(
         Ok(msg) => Some(Ok(msg)),
         _ => None,
     }
+}
+
+pub async fn send_to<T : Serialize>(
+    lines: &mut Framed<TcpStream, LinesCodec>,
+    message : T,
+) -> Result<()> {
+    let msg = serde_json::to_string(&message)?;
+    lines.send(&msg).await?;
+    Ok(())
 }
 
 #[derive(Error, Debug)]

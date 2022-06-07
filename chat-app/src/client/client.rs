@@ -1,7 +1,7 @@
 use chat_app::config::{SERVER_DEFAULT_IP_ADDRESS, SERVER_DEFAULT_PORT};
 use chat_app::database::AuthenticationToken;
 use chat_app::messages::{ServerMessage, UserMessage};
-use chat_app::utils::{get_next_server_message, ChatError};
+use chat_app::utils::{get_next_server_message, send_to, ChatError};
 
 use std::env;
 use std::net::SocketAddr;
@@ -32,12 +32,124 @@ async fn main() -> Result<()> {
             .context("Error in login")?
             .unwrap();
 
+        handle_config(&mut server_lines, &token, &mut ctrlc_channel, &stdin).await?;
+
         let channel_addr = choose_channel(&mut server_lines, &stdin).await?;
 
         let channel_lines = connect_to_channel(channel_addr, &token).await?;
 
         message_loop(channel_lines, &token, &mut ctrlc_channel, &stdin).await?;
     }
+}
+
+fn clear_screen() {
+    print!("\x1B[2J\x1B[1;1H");
+}
+
+async fn handle_config(
+    server_lines: &mut Framed<TcpStream, LinesCodec>,
+    token: &AuthenticationToken,
+    ctrlc_channel: &mut UnboundedReceiver<()>,
+    stdin: &io::Stdin,
+) -> Result<()> {
+    // Clear terminal
+    clear_screen();
+
+    loop {
+        let mut line = String::new();
+        print!(
+            "
+            =====================================\n
+            = 0 - create new user               =\n
+            = 1 - create new channel            =\n
+            = 2 - choose channel                =\n
+            =====================================\n
+        "
+        );
+        stdin.read_line(&mut line).await?;
+        match line.trim().parse::<i16>()? {
+            0 => create_user(server_lines, token, ctrlc_channel, stdin).await?,
+            1 => create_channel(server_lines, token, ctrlc_channel, stdin).await?,
+            2 => return Ok(()),
+            n => tracing::debug!("Invalid option {}", n),
+        }
+    }
+
+    Ok(())
+}
+
+async fn create_channel(
+    server_lines: &mut Framed<TcpStream, LinesCodec>,
+    token: &AuthenticationToken,
+    ctrlc_channel: &mut UnboundedReceiver<()>,
+    stdin: &io::Stdin,
+) -> Result<()> {
+    clear_screen();
+    println!("Enter channel name");
+    let mut name: Option<String> = None;
+    let mut line = String::new();
+    loop {
+        clear_screen();
+        if name.is_some() {
+            println!(
+                "Entered name: {}, write OK to continue or CTRL-C to change",
+                name.as_ref().unwrap()
+            );
+        } else {
+            println!("Enter channel name");
+        }
+        tokio::select! {
+            _ = ctrlc_channel.recv() => {
+                tracing::debug!("CTRL-C clicked in create channel");
+                if name.is_none() {
+                    return Ok(());
+                } else {
+                    name = None;
+                }
+            },
+            _ = stdin.read_line(&mut line) => {
+                line.pop(); // remove end of line
+                if name.is_some() {
+                    if line == "OK" {
+                        break
+                    } else {
+                        name = None;
+                    }
+                } else {
+                    name = Some(line.clone());
+                }
+            }
+        }
+        line.clear();
+    }
+
+    send_to(
+        server_lines,
+        &UserMessage::CreateChannel {
+            token: token.clone(),
+            name: name.unwrap(),
+        },
+    )
+    .await?;
+
+    if let Some(Ok(ServerMessage::TextMessage { content })) =
+        get_next_server_message(server_lines).await
+    {
+        println!("{}", content);
+    } else {
+        tracing::debug!("Error creating channel");
+    }
+
+    Ok(())
+}
+
+async fn create_user(
+    server_lines: &mut Framed<TcpStream, LinesCodec>,
+    token: &AuthenticationToken,
+    ctrlc_channel: &mut UnboundedReceiver<()>,
+    stdin: &io::Stdin,
+) -> Result<()> {
+    Ok(())
 }
 
 fn setup_logging() -> Result<()> {

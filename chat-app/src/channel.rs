@@ -19,6 +19,7 @@ use crate::{
 type Tx = mpsc::UnboundedSender<String>;
 type Rx = mpsc::UnboundedReceiver<String>;
 
+#[derive(Debug)]
 pub struct Channel {
     name: String,
     listener: TcpListener,
