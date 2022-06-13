@@ -245,6 +245,7 @@ dependencies = [
  "futures",
  "portpicker",
  "postgres-types",
+ "rand",
  "serde",
  "serde_json",
  "thiserror",

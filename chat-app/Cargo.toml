@@ -23,6 +23,7 @@ ctrlc = "3.2.2"
 anyhow = "1.0"
 tokio-postgres = "0.7.6"
 postgres-types = { version = "0.2.3", features = ["derive"] }   
+rand="0.8.5"
 
 [[bin]]
 name="client"

@@ -169,16 +169,27 @@ async fn handle_new_user(
 
     match get_next_user_message(&mut lines).await {
         Some(Ok(UserMessage::Connect { name, password })) => {
-            if let Ok(token) = chat_db.authenticate_user(name, password, addr) {
-                send_to(
-                    &mut lines,
-                    &ServerMessage::ConnectResponse {
-                        token: Some(token),
-                        error: None,
-                    }
-                ).await?;
+            match chat_db.authenticate_user(name, password, addr).await {
+                Ok(token) => {
+                    send_to(
+                        &mut lines,
+                        &ServerMessage::ConnectResponse {
+                            token: Some(token),
+                            error: None,
+                        }
+                    ).await?;
+                },
+                Err(err) => {
+                    send_to(
+                        &mut lines,
+                        &ServerMessage::ConnectResponse {
+                            token: None,
+                            error: Some(err.to_string()),
+                        }
+                    ).await?;
+                }
             }
-        }
+        },
         _ => {
             tracing::error!(
                 "[MAIN_SERVER] Failed to get connect message. Client {} disconnected.",
@@ -186,7 +197,7 @@ async fn handle_new_user(
             );
             return Ok(())
         }
-    };
+    }
 
     loop {
         match get_next_user_message(&mut lines).await {

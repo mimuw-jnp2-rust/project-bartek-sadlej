@@ -69,7 +69,7 @@ pub async fn send_to<T : Serialize>(
 pub enum ChatError {
     #[error("Received invalid message")]
     InvalidMessage,
-    #[error("Client provided invalid password")]
+    #[error("Invalid password")]
     InvalidPassword,
     #[error("Name already used")]
     NameUsed,
@@ -77,4 +77,6 @@ pub enum ChatError {
     UnauthenticatedConnection,
     #[error("Runtime error")]
     RuntimeError,
+    #[error("Database error")]
+    DatabaseError
 }

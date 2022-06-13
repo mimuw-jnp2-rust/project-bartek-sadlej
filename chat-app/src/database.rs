@@ -1,8 +1,12 @@
+use std::{net::SocketAddr, collections::HashMap};
+use std::sync::RwLock;
+use rand::{thread_rng, Rng};
+use rand::distributions::Alphanumeric;
+
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
 use tokio_postgres::{Client, Row};
 
-use crate::utils::ChatError;
+use crate::utils::{ChatError, calculate_hash};
 use anyhow::{Context, Result};
 
 type Cookie = String;
@@ -10,6 +14,7 @@ type Cookie = String;
 #[derive(Debug)]
 pub struct ChatDatabase {
     client: Client,
+    tokens: RwLock<HashMap<SocketAddr, AuthenticationToken>>,
 }
 
 // const database = new Sequelize("bd", "bs429589", "iks", {
@@ -20,20 +25,39 @@ pub struct ChatDatabase {
 
 impl ChatDatabase {
     pub fn new(client: Client) -> ChatDatabase {
-        ChatDatabase { client }
+        ChatDatabase { client, tokens : RwLock::new(HashMap::new()) }
     }
 
     #[allow(dead_code)]
-    pub fn authenticate_user(
+    pub async fn authenticate_user(
         &self,
         name: String,
-        _password: String,
-        _addr: SocketAddr,
+        password: String,
+        addr: SocketAddr,
     ) -> Result<AuthenticationToken, ChatError> {
-        Ok(AuthenticationToken {
+        let password_hash = calculate_hash(&password) as i64;
+        match self.client.query("SELECT * FROM users WHERE name = ($1) AND password = ($2)", &[&name, &password_hash]).await {
+            Ok(rows) => {
+                if rows.len() == 0 {
+                    return Err(ChatError::InvalidPassword);
+                }
+            },
+            Err(e) => {
+                tracing::debug!("{:?}", e);
+                return Err(ChatError::DatabaseError);
+            },
+        }
+    
+        let token = AuthenticationToken {
             user_name: name,
-            cookie: "".into(),
-        })
+            cookie: thread_rng()
+                .sample_iter(&Alphanumeric)
+                .take(32)
+                .map(char::from)
+                .collect(),
+        };
+        self.tokens.write().unwrap().insert(addr, token.clone());
+        Ok(token)
     }
 
     pub fn authorize_connection(&self, _token: &AuthenticationToken, _addrr: &SocketAddr) -> bool {

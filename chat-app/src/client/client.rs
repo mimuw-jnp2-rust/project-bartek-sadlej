@@ -15,7 +15,7 @@ use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tokio_util::codec::{Framed, LinesCodec};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -217,6 +217,7 @@ async fn login(
     {
         if let Some(error_msg) = auth_error {
             println!("{}", error_msg);
+            bail!(ChatError::InvalidPassword);
         }
         Ok(new_token)
     } else {
