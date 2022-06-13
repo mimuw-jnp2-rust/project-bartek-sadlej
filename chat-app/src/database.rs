@@ -71,9 +71,15 @@ impl ChatDatabase {
     }
 
     pub async fn create_channel(&self, name: &str) ->Result<()> {
-        self.client.execute("INSERT INTO channels (name) VALUES ($1)", &[&name]).await.context("Error inserting new channel to db!")?;
+        self.client.execute("INSERT INTO channels (name) VALUES ($1)", &[&name]).await.context("Error inserting new channel to database!")?;
         Ok(())
     } 
+
+    pub async fn create_user(&self, name: &String, password: &String) -> Result<()> {
+        let password_hash = calculate_hash(&password) as i64;
+        self.client.execute("INSERT INTO users (name, password) VALUES ($1, $2)", &[name, &password_hash]).await.context("Error inserting new user to database!")?;
+        Ok(())
+    }
 }
 
 // for now cookie it is always empty, but will be usefull later to introduce remembering the state

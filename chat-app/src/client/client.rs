@@ -15,7 +15,7 @@ use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tokio_util::codec::{Framed, LinesCodec};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -88,7 +88,6 @@ async fn create_channel(
     stdin: &io::Stdin,
 ) -> Result<()> {
     clear_screen();
-    println!("Enter channel name");
     let mut name: Option<String> = None;
     let mut line = String::new();
     loop {
@@ -152,6 +151,65 @@ async fn create_user(
     ctrlc_channel: &mut UnboundedReceiver<()>,
     stdin: &io::Stdin,
 ) -> Result<()> {
+    let mut user_data: Option<(String, String)> = None;
+    let mut line = String::new();
+    loop {
+        clear_screen();
+        if user_data.is_some() {
+            println!(
+                "Entered name: {}, password: {}, write OK to continue or CTRL-C to change",
+                user_data.as_ref().unwrap().0,
+                user_data.as_ref().unwrap().1
+            );
+        } else {
+            println!("Enter user name and password");
+        }
+        tokio::select! {
+            _ = ctrlc_channel.recv() => {
+                tracing::debug!("CTRL-C clicked in create channel");
+                if user_data.is_none() {
+                    return Ok(());
+                } else {
+                    user_data = None;
+                }
+            },
+            _ = stdin.read_line(&mut line) => {
+                line.pop(); // remove end of line
+                if user_data.is_some() {
+                    if line == "OK" {
+                        break
+                    } else {
+                        user_data = None;
+                    }
+                } else {
+                    let tmp : Vec<&str> = line.split(" ").collect();
+                    if tmp.len() != 2 { continue };
+                    user_data = Some((tmp[0].to_string(), tmp[1].to_string()));
+                }
+            }
+        }
+        line.clear();
+    }
+
+    let (name, password) = user_data.unwrap();
+    send_to(
+        server_lines,
+        &UserMessage::CreateUser {
+            token: token.clone(),
+            name: name,
+            password: password,
+        },
+    )
+    .await?;
+
+    if let Some(Ok(ServerMessage::TextMessage { content })) =
+    get_next_server_message(server_lines).await
+    {
+        println!("{}", content);
+    } else {
+        tracing::debug!("Error creating new user");
+    }
+
     Ok(())
 }
 
@@ -231,7 +289,14 @@ async fn choose_channel(
     stdin: &io::Stdin,
     token: &AuthenticationToken,
 ) -> Result<SocketAddr> {
-    send_to(server_lines, &UserMessage::GetChannels { token : token.clone() }).await.context("Error receiving channels list from server")?;
+    send_to(
+        server_lines,
+        &UserMessage::GetChannels {
+            token: token.clone(),
+        },
+    )
+    .await
+    .context("Error receiving channels list from server")?;
     if let Some(Ok(ServerMessage::ChannelsInfo {
         channels: channels_infos,
     })) = get_next_server_message(server_lines).await

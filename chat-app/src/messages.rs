@@ -46,6 +46,13 @@ pub enum UserMessage {
         name: String
     },
 
+    // Message with user name and password to create
+    CreateUser {
+        token: AuthenticationToken,
+        name: String,
+        password: String,
+    },
+
     // Request to get channels info list
     GetChannels {
         token: AuthenticationToken,

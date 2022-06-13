@@ -213,6 +213,18 @@ async fn handle_new_user(
                 }
                 send_to(&mut lines, &ServerMessage::TextMessage { content }).await?;
             }
+            Some(Ok(UserMessage::CreateUser { 
+                token, 
+                name, password
+            })) => {
+                authorize_connection(&chat_db, &token, &mut lines).await?;
+                let content : String;
+                match create_user(&chat_db, &name, &password).await {
+                    Ok(()) => content = format!("Successfully created new user {} with password {}", name, password),
+                    Err(e) => content = format!("{:?}", e),
+                }
+                send_to(&mut lines, &ServerMessage::TextMessage { content }).await?;
+            },
             Some(Ok(UserMessage::GetChannels {
                 token,
             })) => {
@@ -229,5 +241,10 @@ async fn handle_new_user(
         }
     } 
 
+    Ok(())
+}
+
+async fn create_user(chat_db: &Arc<ChatDatabase>, name: &String, password: &String) -> Result<()> {
+    chat_db.create_user(name, password).await?;
     Ok(())
 }
