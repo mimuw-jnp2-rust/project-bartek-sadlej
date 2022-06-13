@@ -133,7 +133,7 @@ impl Channel {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChannelInfo {
     pub name: String,
     pub address: std::net::SocketAddr,

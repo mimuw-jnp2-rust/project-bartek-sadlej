@@ -47,9 +47,8 @@ impl ChatDatabase {
     }
 
     pub async fn create_channel(&self, name: &str) ->Result<()> {
-        tracing::debug!("TODO create_channel");
+        self.client.execute("INSERT INTO channels (name) VALUES ($1)", &[&name]).await.context("Error inserting new channel to db!")?;
         Ok(())
-        // todo!();
     } 
 }
 

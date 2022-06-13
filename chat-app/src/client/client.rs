@@ -2,9 +2,11 @@ use chat_app::config::{SERVER_DEFAULT_IP_ADDRESS, SERVER_DEFAULT_PORT};
 use chat_app::database::AuthenticationToken;
 use chat_app::messages::{ServerMessage, UserMessage};
 use chat_app::utils::{get_next_server_message, send_to, ChatError};
+use tokio_postgres::Client;
 
 use std::env;
 use std::net::SocketAddr;
+use std::process::exit;
 
 use async_std::io;
 
@@ -34,7 +36,7 @@ async fn main() -> Result<()> {
 
         handle_config(&mut server_lines, &token, &mut ctrlc_channel, &stdin).await?;
 
-        let channel_addr = choose_channel(&mut server_lines, &stdin).await?;
+        let channel_addr = choose_channel(&mut server_lines, &stdin, &token).await?;
 
         let channel_lines = connect_to_channel(channel_addr, &token).await?;
 
@@ -63,19 +65,20 @@ async fn handle_config(
             = 0 - create new user               =\n
             = 1 - create new channel            =\n
             = 2 - choose channel                =\n
+            = 3 - exit                          =\n
             =====================================\n
         "
         );
         stdin.read_line(&mut line).await?;
+        tracing::debug!("inserted {}", line);
         match line.trim().parse::<i16>()? {
             0 => create_user(server_lines, token, ctrlc_channel, stdin).await?,
             1 => create_channel(server_lines, token, ctrlc_channel, stdin).await?,
             2 => return Ok(()),
+            3 => exit(0),
             n => tracing::debug!("Invalid option {}", n),
         }
     }
-
-    Ok(())
 }
 
 async fn create_channel(
@@ -225,7 +228,9 @@ async fn login(
 async fn choose_channel(
     server_lines: &mut Framed<TcpStream, LinesCodec>,
     stdin: &io::Stdin,
+    token: &AuthenticationToken,
 ) -> Result<SocketAddr> {
+    send_to(server_lines, &UserMessage::GetChannels { token : token.clone() }).await.context("Error receiving channels list from server")?;
     if let Some(Ok(ServerMessage::ChannelsInfo {
         channels: channels_infos,
     })) = get_next_server_message(server_lines).await
@@ -276,6 +281,7 @@ async fn message_loop(
     ctrlc_channel: &mut UnboundedReceiver<()>,
     stdin: &io::Stdin,
 ) -> Result<()> {
+    clear_screen();
     let mut line = String::new();
     loop {
         tokio::select! {

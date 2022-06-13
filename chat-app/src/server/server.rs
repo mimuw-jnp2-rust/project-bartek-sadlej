@@ -24,10 +24,11 @@ async fn main() -> Result<()> {
     setup_logging()?;
     
     let chat_db = configure_database().await?;
-    let channels_info_message = configure_channels(&chat_db).await?;
+    let channels_infos : Arc<RwLock<Vec<ChannelInfo>>> = Arc::new(RwLock::new(Vec::new()));
+    configure_channels(&chat_db, &channels_infos, None).await?;
     let listener = configure_server().await?;
 
-    accept_loop(listener, chat_db, channels_info_message).await?;
+    accept_loop(listener, chat_db, channels_infos).await?;
     Ok(())
 }
 
@@ -87,12 +88,21 @@ fn setup_logging() -> Result<()> {
     Ok(())
 }
 
-async fn configure_channels(chat_db: &Arc<ChatDatabase>) -> Result<Arc<RwLock<ServerMessage>>> {
-    let mut channels_infos: Vec<ChannelInfo> = Vec::new();
-    for channel_name in chat_db.get_channels_names().await? {
+async fn configure_channels(chat_db: &Arc<ChatDatabase>, channels_infos: &Arc<RwLock<Vec<ChannelInfo>>>, mut new_channels_names : Option<Vec<String>>) -> Result<()> {
+    if new_channels_names.is_none() {
+        new_channels_names = Some(chat_db.get_channels_names().await.context("Error getting channels names from db")?);
+    } else {
+        for name in new_channels_names.as_ref().unwrap() {
+            chat_db.create_channel(name).await?;
+        }
+    }
+
+    for channel_name in new_channels_names.unwrap() {
         let chat_db = Arc::clone(chat_db);
         let new_channel = Arc::new(Channel::new(channel_name, chat_db).await);
-        channels_infos.push(new_channel.get_channel_info());
+        let new_channel_info = new_channel.get_channel_info();
+        tracing::info!("Created channel: {:?}", new_channel_info);
+        channels_infos.write().unwrap().push(new_channel_info);
 
         tokio::spawn(async move {
             if let Err(e) = new_channel.listen().await {
@@ -100,11 +110,8 @@ async fn configure_channels(chat_db: &Arc<ChatDatabase>) -> Result<Arc<RwLock<Se
             }
         });
     }
-    tracing::info!("Created channels: {:?}", channels_infos);
-    let channels_info_message = Arc::new(RwLock::new(ServerMessage::ChannelsInfo {
-        channels: channels_infos,
-    }));
-    Ok(channels_info_message)
+
+    Ok(())
 }
 
 async fn configure_server() -> Result<TcpListener> {
@@ -119,17 +126,17 @@ async fn configure_server() -> Result<TcpListener> {
 async fn accept_loop(
     listener: TcpListener,
     chat_db: Arc<ChatDatabase>,
-    channels_info_message: Arc<RwLock<ServerMessage>>,
+    channels_infos: Arc<RwLock<Vec<ChannelInfo>>>,
 ) -> Result<()> {
     loop {
         let (stream, addr) = listener.accept().await.context("Error in accept loop!")?;
 
         let chat_db = Arc::clone(&chat_db);
-        let channels_info_message = Arc::clone(&channels_info_message);
+        let channels_infos = Arc::clone(&channels_infos );
 
         tokio::spawn(async move {
             tracing::info!("[MAIN_SERVER] accepted connection {}", addr);
-            if let Err(e) = handle_new_user(stream, addr, chat_db, channels_info_message).await {
+            if let Err(e) = handle_new_user(stream, addr, chat_db, channels_infos).await {
                 tracing::info!("[MAIN_SERVER] an error occurred; error = {:?}", e);
             }
         });
@@ -156,7 +163,7 @@ async fn handle_new_user(
     stream: TcpStream,
     addr: SocketAddr,
     chat_db: Arc<ChatDatabase>,
-    channels_info_message: Arc<RwLock<ServerMessage>>,
+    channels_infos: Arc<RwLock<Vec<ChannelInfo>>>,
 ) -> Result<()> {
     let mut lines = Framed::new(stream, LinesCodec::new());
 
@@ -189,16 +196,22 @@ async fn handle_new_user(
             })) =>  {
                 authorize_connection(&chat_db, &token, &mut lines).await?;
                 let content : String;
-                match chat_db.create_channel(&name).await {
+                match configure_channels(&chat_db, &channels_infos, Some(vec![name.clone()])).await {
                     Ok(()) => content = format!("Successfully created channel {}", name),
                     Err(e) => content = format!("{:?}", e),
                 }
                 send_to(&mut lines, &ServerMessage::TextMessage { content }).await?;
             }
             Some(Ok(UserMessage::GetChannels {
-                token: AuthenticationToken,
+                token,
             })) => {
-                send_to(&mut lines, channels_info_message.as_ref()).await?;
+                authorize_connection(&chat_db, &token, &mut lines).await?;
+                let channels_info_message = ServerMessage::ChannelsInfo { channels: channels_infos.read().unwrap().to_vec() };
+                send_to(&mut lines, channels_info_message).await?;
+                break;
+            }
+            None => {
+                tracing::info!("Client {:?} disconnected", addr);
                 break;
             }
             _ => tracing::debug!("Unimpleneted"),
@@ -206,13 +219,4 @@ async fn handle_new_user(
     } 
 
     Ok(())
-}
-
-async fn create_channel(
-    stream: TcpStream,
-    addr: SocketAddr,
-    chat_db: Arc<ChatDatabase>,
-    channels_info_message: Arc<RwLock<ServerMessage>>,   
-) -> Result<()> {
-    todo!();
 }
