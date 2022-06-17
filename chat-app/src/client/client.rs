@@ -2,7 +2,7 @@ use chat_app::config::{SERVER_DEFAULT_IP_ADDRESS, SERVER_DEFAULT_PORT};
 use chat_app::database::AuthenticationToken;
 use chat_app::messages::{ServerMessage, UserMessage};
 use chat_app::utils::{get_next_server_message, send_to, ChatError};
-use tokio_postgres::Client;
+
 
 use std::env;
 use std::net::SocketAddr;
@@ -39,7 +39,8 @@ async fn main() -> Result<()> {
         let channel_addr = choose_channel(&mut server_lines, &stdin, &token).await?;
 
         let channel_lines = connect_to_channel(channel_addr, &token).await?;
-
+        
+        clear_screen();
         message_loop(channel_lines, &token, &mut ctrlc_channel, &stdin).await?;
     }
 }
@@ -182,8 +183,11 @@ async fn create_user(
                         user_data = None;
                     }
                 } else {
-                    let tmp : Vec<&str> = line.split(" ").collect();
-                    if tmp.len() != 2 { continue };
+                    let tmp : Vec<&str> = line.split(' ').collect();
+                    if tmp.len() != 2 { 
+                        user_data = None;
+                        continue;
+                    };
                     user_data = Some((tmp[0].to_string(), tmp[1].to_string()));
                 }
             }
@@ -196,8 +200,8 @@ async fn create_user(
         server_lines,
         &UserMessage::CreateUser {
             token: token.clone(),
-            name: name,
-            password: password,
+            name,
+            password,
         },
     )
     .await?;
@@ -338,6 +342,7 @@ async fn connect_to_channel(
         channel_lines.send(encoded_msg).await?;
     }
 
+    clear_screen();
     Ok(channel_lines)
 }
 
@@ -347,7 +352,7 @@ async fn message_loop(
     ctrlc_channel: &mut UnboundedReceiver<()>,
     stdin: &io::Stdin,
 ) -> Result<()> {
-    clear_screen();
+    
     let mut line = String::new();
     loop {
         tokio::select! {

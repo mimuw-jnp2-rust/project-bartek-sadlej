@@ -8,7 +8,7 @@ use tokio_stream::StreamExt;
 use tokio_util::codec::{Framed, LinesCodec};
 
 use thiserror::Error;
-use anyhow::{Context, Result};
+use anyhow::{Result};
 
 use crate::messages::{ServerMessage, UserMessage};
 
@@ -42,10 +42,7 @@ pub async fn get_next_user_message(
 ) -> Option<Result<UserMessage>> {
     let line = match lines.next().await {
         Some(Ok(line)) => line,
-        x => {
-            tracing::error!("Received message: {:?}", x);
-            return None;
-        }
+        _ => return None, // disconnect
     };
     let decoded_msg: Result<UserMessage, serde_json::Error> = serde_json::from_str(&line);
     tracing::debug!("Received new message: {:?}", decoded_msg);
@@ -77,6 +74,8 @@ pub enum ChatError {
     UnauthenticatedConnection,
     #[error("Runtime error")]
     RuntimeError,
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
     #[error("Database error")]
-    DatabaseError
+    DatabaseError(#[from] tokio_postgres::Error),
 }

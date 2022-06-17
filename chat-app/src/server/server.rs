@@ -8,9 +8,9 @@ use chat_app::database::{ChatDatabase, AuthenticationToken};
 use chat_app::messages::{ServerMessage, UserMessage};
 use chat_app::utils::{calculate_hash, get_next_user_message, send_to, ChatError};
 
-use futures::SinkExt;
+
 use tokio::net::{TcpListener, TcpStream};
-use tokio_postgres::{tls::NoTlsStream, Client, Connection, NoTls, Socket};
+use tokio_postgres::{NoTls};
 use tokio_util::codec::{Framed, LinesCodec};
 
 use futures::future;
@@ -48,33 +48,45 @@ async fn configure_database() -> Result<Arc<ChatDatabase>> {
         }
     });
 
-    // future::try_join(
-    //     client.batch_execute("DROP TABLE IF EXISTS channels"),
-    //     client.batch_execute("DROP TABLE IF EXISTS users")
-    // ).await?;
+    client.batch_execute("DROP TABLE IF EXISTS channels CASCADE").await?;
+    client.batch_execute("DROP TABLE IF EXISTS users CASCADE").await?;
+    client.batch_execute("DROP TABLE IF EXISTS messages CASCADE").await?;
+    client.batch_execute("DROP TABLE IF EXISTS history CASCADE").await?;
 
-    // future::try_join(
-    //     client.batch_execute("CREATE TABLE channels (
-    //         id          SERIAL PRIMARY KEY,
-    //         name        VARCHAR NOT NULL)"),
-    //     client.batch_execute("CREATE TABLE users (
-    //         id          SERIAL PRIMARY KEY,
-    //         name        VARCHAR NOT NULL,
-    //         password    BIGINT)")
-    //     ).await?;
+    future::try_join(
+        client.batch_execute("CREATE TABLE channels (
+            name        TEXT NOT NULL PRIMARY KEY)"),
+        client.batch_execute("CREATE TABLE users (
+            name        TEXT NOT NULL PRIMARY KEY,
+            password    BIGINT)")
+        ).await?;
 
-    // client.execute("INSERT INTO channels (name) VALUES ($1)", &[&"RED"]).await?;
-    // client.execute("INSERT INTO channels (name) VALUES ($1)", &[&"BLUE"]).await?;
-    // client.execute("INSERT INTO channels (name) VALUES ($1)", &[&"BROWN"]).await?;
+    client.batch_execute("CREATE TABLE messages (
+        id              SERIAL PRIMARY KEY,
+        channel_name    TEXT NOT NULL,
+        user_name       TEXT NOT NULL,
+        content         TEXT,
+        CONSTRAINT      fk_channel FOREIGN KEY(channel_name) REFERENCES channels(name),
+        CONSTRAINT      fk_user FOREIGN KEY(user_name) REFERENCES users(name)
+    )").await?;
 
-    // let name1= "Alice".to_string();
-    // let name2= "Bob".to_string();
+    client.batch_execute("CREATE TABLE history (
+        user_name       TEXT NOT NULL,
+        channel_name    TEXT NOT NULL,
+        message_id      INT NOT NULL,
+        CONSTRAINT      pk PRIMARY KEY(user_name, channel_name),
+        CONSTRAINT      fk_message FOREIGN KEY(message_id) REFERENCES messages(id)
+    )").await?;
 
-    // let password1: i64 = calculate_hash(&"123") as i64;
-    // let password2 : i64= calculate_hash(&"456") as i64;
+    client.execute("INSERT INTO channels (name) VALUES ($1)", &[&"RED"]).await?;
+    client.execute("INSERT INTO channels (name) VALUES ($1)", &[&"BLUE"]).await?;
+    client.execute("INSERT INTO channels (name) VALUES ($1)", &[&"BROWN"]).await?;
 
-    // client.execute("INSERT INTO users (name, password) VALUES ($1, $2)", &[&name1, &password1]).await?;
-    // client.execute("INSERT INTO users (name, password) VALUES ($1, $2)", &[&name2, &password2]).await?;
+    let name1= "ADMIN".to_string();
+
+    let password1: i64 = calculate_hash(&"ADMIN") as i64;
+
+    client.execute("INSERT INTO users (name, password) VALUES ($1, $2)", &[&name1, &password1]).await?;
 
     Ok(Arc::new(ChatDatabase::new(client)))
 }

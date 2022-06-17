@@ -9,6 +9,7 @@ use tokio_util::codec::{Framed, LinesCodec};
 
 use anyhow::{Context, Result};
 
+use crate::utils::send_to;
 use crate::{
     config::SERVER_DEFAULT_IP_ADDRESS,
     database::ChatDatabase,
@@ -64,7 +65,7 @@ impl Channel {
             tokio::spawn(async move {
                 tracing::debug!("[{}] accepted connection {:?}", me.name, addr);
                 if let Err(e) =
-                    Channel::handle_connection(me.name.as_str(), state, stream, addr).await
+                    Channel::handle_connection(&me.name, state, stream, addr).await
                 {
                     tracing::info!("[{}] an error occurred; error = {:?}", me.name, e);
                 }
@@ -73,14 +74,14 @@ impl Channel {
     }
 
     async fn handle_connection(
-        name: &str,
+        name: &String,
         state: Arc<Shared>,
         stream: TcpStream,
         addr: SocketAddr,
     ) -> Result<(), ChatError> {
         let mut lines = Framed::new(stream, LinesCodec::new());
 
-        let username = match get_next_user_message(&mut lines).await {
+        let user_name = match get_next_user_message(&mut lines).await {
             Some(Ok(UserMessage::Join { token })) => {
                 if state.chat_db.authorize_connection(&token, &addr) {
                     tracing::info!("[{}] new authenticated connection from {}", name, addr);
@@ -93,11 +94,13 @@ impl Channel {
             _ => return Err(ChatError::InvalidMessage),
         };
 
+        Channel::send_unseen_messages(&mut lines, &state, name, &user_name).await?;
+
         let mut peer = Peer::new(state.clone(), lines)
             .await
             .map_err(|_| ChatError::RuntimeError)?;
         match serde_json::to_string(&ServerMessage::TextMessage {
-            content: format!("{} has joined!", username),
+            content: format!("{} has joined!", user_name),
         }) {
             Ok(msg) => state.broadcast(addr, &msg).await,
             _ => return Err(ChatError::RuntimeError),
@@ -111,6 +114,7 @@ impl Channel {
                 user_message = get_next_user_message(&mut peer.lines) => match user_message {
                     Some(Ok(UserMessage::TextMessage { token , content  })) => {
                         if state.chat_db.authorize_connection(&token, &addr) {
+                            Channel::save_message(&state, &name, &user_name, &content).await?;
                             let formetted_message = format!("[{}] {}", token.user_name, content);
                             if let Ok(encoded_message) = serde_json::to_string(&ServerMessage::TextMessage{content : formetted_message}) {
                                 state.broadcast(addr, &encoded_message).await;
@@ -122,16 +126,47 @@ impl Channel {
                         }
                     },
                     _ => {
+                        Channel::save_history(&state, &name, &user_name).await?;
                         tracing::info!("[{}] invalid message from {}, disconnecting",name, addr);
                         return Err(ChatError::InvalidMessage);
                     },
-                    // The stream has been exhausted.
-                    // None => break,
                 },
             }
         }
     }
+
+    async fn save_message(
+        state: &Arc<Shared>,
+        channel_name: &String, 
+        user_name: &String,
+        message: &String,
+    ) -> Result<(), ChatError> {
+        state.chat_db.save_message(channel_name, user_name, message).await
+    }
+
+    async fn save_history(
+        state: &Arc<Shared>,
+        channel_name: &String, 
+        user_name: &String,
+    ) -> Result<(), ChatError> {
+        state.chat_db.save_history(channel_name, user_name).await
+    }
+
+    async fn send_unseen_messages(
+        lines: &mut Framed<TcpStream, LinesCodec>,
+        state: &Arc<Shared>,
+        channel_name: &String, 
+        user_name: &String,
+    ) -> Result<()> {
+        let unseen_messages = state.chat_db.get_unseed_messages(channel_name, user_name).await?;
+        for (user, content) in unseen_messages.into_iter() {
+            let message = format!("[{}] {}", user, content);
+            send_to(lines, &ServerMessage::TextMessage{content : message}).await?
+        }
+        Ok(())
+    }
 }
+
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChannelInfo {
