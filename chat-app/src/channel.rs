@@ -64,9 +64,7 @@ impl Channel {
 
             tokio::spawn(async move {
                 tracing::debug!("[{}] accepted connection {:?}", me.name, addr);
-                if let Err(e) =
-                    Channel::handle_connection(&me.name, state, stream, addr).await
-                {
+                if let Err(e) = Channel::handle_connection(&me.name, state, stream, addr).await {
                     tracing::info!("[{}] an error occurred; error = {:?}", me.name, e);
                 }
             });
@@ -74,7 +72,7 @@ impl Channel {
     }
 
     async fn handle_connection(
-        name: &String,
+        name: &str,
         state: Arc<Shared>,
         stream: TcpStream,
         addr: SocketAddr,
@@ -83,7 +81,7 @@ impl Channel {
 
         let user_name = match get_next_user_message(&mut lines).await {
             Some(Ok(UserMessage::Join { token })) => {
-                if state.chat_db.authorize_connection(&token, &addr) {
+                if state.chat_db.authorize_connection(&token) {
                     tracing::info!("[{}] new authenticated connection from {}", name, addr);
                     token.user_name.clone()
                 } else {
@@ -113,8 +111,8 @@ impl Channel {
                 }
                 user_message = get_next_user_message(&mut peer.lines) => match user_message {
                     Some(Ok(UserMessage::TextMessage { token , content  })) => {
-                        if state.chat_db.authorize_connection(&token, &addr) {
-                            Channel::save_message(&state, &name, &user_name, &content).await?;
+                        if state.chat_db.authorize_connection(&token) {
+                            Channel::save_message(&state, name, &user_name, &content).await?;
                             let formetted_message = format!("[{}] {}", token.user_name, content);
                             if let Ok(encoded_message) = serde_json::to_string(&ServerMessage::TextMessage{content : formetted_message}) {
                                 state.broadcast(addr, &encoded_message).await;
@@ -126,7 +124,7 @@ impl Channel {
                         }
                     },
                     _ => {
-                        Channel::save_history(&state, &name, &user_name).await?;
+                        Channel::save_history(&state, name, &user_name).await?;
                         tracing::info!("[{}] invalid message from {}, disconnecting",name, addr);
                         return Err(ChatError::InvalidMessage);
                     },
@@ -137,17 +135,20 @@ impl Channel {
 
     async fn save_message(
         state: &Arc<Shared>,
-        channel_name: &String, 
-        user_name: &String,
-        message: &String,
+        channel_name: &str,
+        user_name: &str,
+        message: &str,
     ) -> Result<(), ChatError> {
-        state.chat_db.save_message(channel_name, user_name, message).await
+        state
+            .chat_db
+            .save_message(channel_name, user_name, message)
+            .await
     }
 
     async fn save_history(
         state: &Arc<Shared>,
-        channel_name: &String, 
-        user_name: &String,
+        channel_name: &str,
+        user_name: &str,
     ) -> Result<(), ChatError> {
         state.chat_db.save_history(channel_name, user_name).await
     }
@@ -155,18 +156,20 @@ impl Channel {
     async fn send_unseen_messages(
         lines: &mut Framed<TcpStream, LinesCodec>,
         state: &Arc<Shared>,
-        channel_name: &String, 
-        user_name: &String,
+        channel_name: &str,
+        user_name: &str,
     ) -> Result<()> {
-        let unseen_messages = state.chat_db.get_unseed_messages(channel_name, user_name).await?;
+        let unseen_messages = state
+            .chat_db
+            .get_unseed_messages(channel_name, user_name)
+            .await?;
         for (user, content) in unseen_messages.into_iter() {
             let message = format!("[{}] {}", user, content);
-            send_to(lines, &ServerMessage::TextMessage{content : message}).await?
+            send_to(lines, &ServerMessage::TextMessage { content: message }).await?
         }
         Ok(())
     }
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChannelInfo {

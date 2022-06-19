@@ -3,12 +3,11 @@ use chat_app::database::AuthenticationToken;
 use chat_app::messages::{ServerMessage, UserMessage};
 use chat_app::utils::{get_next_server_message, send_to, ChatError};
 
-
 use std::env;
 use std::net::SocketAddr;
 use std::process::exit;
 
-use async_std::io;
+use async_std::io::{self, WriteExt};
 
 use futures::SinkExt;
 use tokio::net::{TcpSocket, TcpStream};
@@ -39,8 +38,7 @@ async fn main() -> Result<()> {
         let channel_addr = choose_channel(&mut server_lines, &stdin, &token).await?;
 
         let channel_lines = connect_to_channel(channel_addr, &token).await?;
-        
-        clear_screen();
+
         message_loop(channel_lines, &token, &mut ctrlc_channel, &stdin).await?;
     }
 }
@@ -184,7 +182,7 @@ async fn create_user(
                     }
                 } else {
                     let tmp : Vec<&str> = line.split(' ').collect();
-                    if tmp.len() != 2 { 
+                    if tmp.len() != 2 {
                         user_data = None;
                         continue;
                     };
@@ -207,7 +205,7 @@ async fn create_user(
     .await?;
 
     if let Some(Ok(ServerMessage::TextMessage { content })) =
-    get_next_server_message(server_lines).await
+        get_next_server_message(server_lines).await
     {
         println!("{}", content);
     } else {
@@ -316,6 +314,8 @@ async fn choose_channel(
             stdin.read_line(&mut line).await?;
             let channel_nr = line.trim().parse::<usize>()?;
             if channel_nr < channels_infos.len() {
+                clear_screen();
+                _ = io::stdout().flush().await;
                 return Ok(channels_infos[channel_nr].address);
             }
         }
@@ -352,7 +352,6 @@ async fn message_loop(
     ctrlc_channel: &mut UnboundedReceiver<()>,
     stdin: &io::Stdin,
 ) -> Result<()> {
-    
     let mut line = String::new();
     loop {
         tokio::select! {

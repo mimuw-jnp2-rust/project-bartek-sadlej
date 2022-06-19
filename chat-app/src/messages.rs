@@ -43,7 +43,7 @@ pub enum UserMessage {
     // Message with channel name to create
     CreateChannel {
         token: AuthenticationToken,
-        name: String
+        name: String,
     },
 
     // Message with user name and password to create
@@ -56,5 +56,5 @@ pub enum UserMessage {
     // Request to get channels info list
     GetChannels {
         token: AuthenticationToken,
-    }
+    },
 }

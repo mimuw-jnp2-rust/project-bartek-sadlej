@@ -7,8 +7,8 @@ use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
 use tokio_util::codec::{Framed, LinesCodec};
 
+use anyhow::Result;
 use thiserror::Error;
-use anyhow::{Result};
 
 use crate::messages::{ServerMessage, UserMessage};
 
@@ -53,9 +53,9 @@ pub async fn get_next_user_message(
     }
 }
 
-pub async fn send_to<T : Serialize>(
+pub async fn send_to<T: Serialize>(
     lines: &mut Framed<TcpStream, LinesCodec>,
-    message : T,
+    message: T,
 ) -> Result<()> {
     let msg = serde_json::to_string(&message)?;
     lines.send(&msg).await?;
