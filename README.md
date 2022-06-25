@@ -1,30 +1,31 @@
 # Chat App
 
-## Autorzy
-- Barte Sadlej 
+## Authors
+- Barte Sadlej (github: barteksad)
 
-## Opis
-Komunikator napisany w ruscie
+## Description
+Chat app written in Rust with Postgress db
 
-## Funkcjonalność
+## Functionality
 1)
-- [x] Serwer tworzy podane jako argumenty kanały 
-- [x] Użytkownicy przy dołączaniu podaje nik i nazwe kanału do którego chcą dołączyć
-- [x] Wiadomości są widoczne w obrębie jednego kanału
-- [x] Można albo wysłać wiadomośc albo zmienić kanał
+- [x] Server creates channels provided as input arguments 
+- [x] Users provide nick-names and password while joining and can choose channels
+- [x] Messages are visible across channel
+- [x] One can either send a message or change the channel
 
 2)
-- Dodanie logowania i tworzenia użytkowników 
-- Wczytywanie i zapisywanie kanałów i użytkowników
-- Tworzenie nowych kanałów i pamiętanie kanałów urzytkowników 
-- Dodanie historii oraz wysyłanie nieprzeczytanych wiadomości, wysłanych od ostatniego logowania 
+- [x] Added logging and creating users 
+- [x] Loading and saving channels and users from database
+- [x] Creating new channels and saving messages 
+- [x] Added meassages history and sending messages unseen from last user logging 
 
-- Wszystko raczej z terminala
-## Propozycja podziału na części
-W pierwszej części pierwsze cztery punkty, 
+- everything from terminal
+## A proposal for division into parts
+In first pars first four points, 
 
-W drugiej części kolejne cztery punkty, 
+In secound part, secound four points, 
 
-## Biblioteki
-- Tokio : wątki obsługujące i połączenie i server tcp
-- Serde : do serializacji komunikatów (to chyba dobry pomysł?)
+## Libraries
+- Tokio : threads for each connection and TCP stream
+- Serde : for messages serialization
+- and lots of smaller ones
