@@ -1,27 +1,31 @@
-# Frobnicator
+# Chat App
 
-## Autorzy
-- Andrzej Głuszak (gr 9, @agluszak na githubie)
-- Linus Torvalds (Uniwersytet Helsiński, @torvalds na githubie)
+## Authors
+- Barte Sadlej (github: barteksad)
 
-## Opis
-Od zawsze chcieliśmy napisać grę komputerową.
-Frobnicator będzie to gra platformowa, w której chodzi o to, żeby...
+## Description
+Chat app written in Rust with Postgress db
 
-Z grubsza będziemy wzorować się na [tym tutorialu](https://dev.to/sbelzile/rust-platformer-part-1-bevy-and-ecs-2pci).
+## Functionality
+1)
+- [x] Server creates channels provided as input arguments 
+- [x] Users provide nick-names and password while joining and can choose channels
+- [x] Messages are visible across channel
+- [x] One can either send a message or change the channel
 
-## Funkcjonalność
-- Generowanie map
-- Strzelanie
-- AI dla wrogów (bardziej rozbudowane niż w tutorialu)
-- Możliwość zapisywania i wczytywania stanu gry
-- Punktacja
+2)
+- [x] Added logging and creating users 
+- [x] Loading and saving channels and users from database
+- [x] Creating new channels and saving messages 
+- [x] Added meassages history and sending messages unseen from last user logging 
 
-## Propozycja podziału na części
-W pierwszej części stworzymy grę opartą na tutorialu (z lepszym AI) i jedną zahardcodowaną planszą.
+- everything from terminal
+## A proposal for division into parts
+In first pars first four points, 
 
-W drugiej części dodamy do tego losowy generator map, zapisywanie/wczytywanie stanu gry oraz system punktacji.
+In secound part, secound four points, 
 
-## Biblioteki
-- Bevy
-- może coś do serializacji danych? (czy mógłby Pan coś polecić?)
+## Libraries
+- Tokio : threads for each connection and TCP stream
+- Serde : for messages serialization
+- and lots of smaller ones
